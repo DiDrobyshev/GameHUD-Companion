@@ -1,0 +1,24 @@
+{
+  "firstRun": true,
+  "activeProfile": "default",
+  "mainOpacity": 90,
+  "pipOpacity": 100,
+  "pipVolume": 80,
+  "hotkeys": {
+    "ghostModeMain": "Alt+G",
+    "ghostModePip": "Alt+L",
+    "bossKey": "Alt+H",
+    "playPausePip": "Alt+P",
+    "hoverTranslate": "Alt+T",
+    "snipperTool": "Alt+S",
+    "quickSearch": "Ctrl+Space"
+  },
+  "timerPresets": [],
+  "aiConfig": {
+    "provider": "Gemini",
+    "apiKey": "",
+    "modelName": "gemini-2.5-flash",
+    "customEndpoint": "",
+    "webSearchEnabled": true
+  }
+}

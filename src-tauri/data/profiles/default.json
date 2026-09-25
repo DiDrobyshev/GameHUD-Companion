@@ -1,0 +1,14 @@
+{
+  "id": "default",
+  "name": "Основной",
+  "tabs": [
+    {
+      "id": "note-1",
+      "title": "Заметка 1",
+      "content": "# Новая заметка\n\n",
+      "createdAt": 1700000000000,
+      "filePath": "note_1.md"
+    }
+  ],
+  "activeTabId": "note-1"
+}
