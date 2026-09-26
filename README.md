@@ -119,7 +119,7 @@
 1. **Клонирование репозитория:**
    ```powershell
    git clone [https://github.com/DiDrobyshev/GameHUD-Companion.git](https://github.com/DiDrobyshev/GameHUD-Companion.git)
-   cd game-notes-overlay
+   cd GameHUD-Companion
 
 2. **Установите зависимости:**
    ```powershell
