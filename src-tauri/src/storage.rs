@@ -11,23 +11,24 @@ pub struct NoteFileInfo {
 }
 
 pub fn get_data_dir() -> PathBuf {
-    // Check if ./data exists in current directory or relative to executable
+    // 1. In dev mode or when ./data exists in current working directory, use it
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let local_data = current_dir.join("data");
     if local_data.exists() {
         return local_data;
     }
+    let src_tauri_data = current_dir.join("src-tauri").join("data");
+    if src_tauri_data.exists() {
+        return src_tauri_data;
+    }
 
+    // 2. In production, always locate data next to the executable for portability
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            let exe_data = exe_dir.join("data");
-            if exe_data.exists() {
-                return exe_data;
-            }
+            return exe_dir.join("data");
         }
     }
 
-    // Default to ./data in working directory
     local_data
 }
 

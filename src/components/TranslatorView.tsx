@@ -5,11 +5,9 @@ import {
   Copy,
   Check,
   PlusCircle,
-  Crop,
   Sparkles,
   Trash2
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../store/useAppStore';
 import { translateText } from '../utils/translator';
 
@@ -34,7 +32,6 @@ export const TranslatorView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [inserted, setInserted] = useState(false);
-  const [snipperTriggered, setSnipperTriggered] = useState(false);
 
   const { appendNoteContent } = useAppStore();
 
@@ -97,51 +94,16 @@ export const TranslatorView: React.FC = () => {
     setTimeout(() => setInserted(false), 2000);
   };
 
-  const handleTriggerSnipper = async () => {
-    setSnipperTriggered(true);
-    try {
-      await invoke('show_window', { windowLabel: 'snipper' });
-    } catch (err) {
-      console.error('Failed to show snipper window:', err);
-    } finally {
-      setTimeout(() => setSnipperTriggered(false), 2000);
-    }
-  };
-
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#0b0c0e] p-6 overflow-y-auto text-zinc-100 select-none">
-      <div className="max-w-4xl w-full mx-auto flex flex-col gap-6">
-        {/* Banner with OCR quick action tools */}
-        <div className="bg-[#14161b]/90 border border-zinc-800/80 rounded-xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5 text-amber-400 font-bold text-base mb-1">
-              <Languages className="w-5 h-5 text-amber-400" />
-              <span>Экранный & Ручной Переводчик</span>
-            </div>
-            <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
-              Быстрый перевод диалогов, описаний квестов и предметов. Нажмите{' '}
-              <kbd className="px-1.5 py-0.5 bg-zinc-900 border border-amber-500/30 text-amber-300 rounded text-[10px] font-mono">
-                Alt+T
-              </kbd>{' '}
-              для перевода под курсором или{' '}
-              <kbd className="px-1.5 py-0.5 bg-zinc-900 border border-amber-500/30 text-amber-300 rounded text-[10px] font-mono">
-                Alt+S
-              </kbd>{' '}
-              для стоп-кадра с рамкой.
-            </p>
+    <div className="flex-1 flex flex-col h-full bg-[#0b0c0e] p-4 sm:p-6 overflow-y-auto text-zinc-100 select-none">
+      <div className="max-w-4xl w-full mx-auto flex flex-col gap-4">
+        {/* Header Title */}
+        <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+            <Languages className="w-4 h-4 text-amber-400" />
+            <span>Переводчик текста</span>
           </div>
-
-          {/* Quick Screen Tools Buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleTriggerSnipper}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 text-zinc-950 rounded-lg text-xs font-semibold shadow-md shadow-amber-500/10 hover:brightness-110 active:scale-95 transition"
-              title="Сделать стоп-кадр и выделить рамкой диалог на экране (Alt+S)"
-            >
-              <Crop className="w-4 h-4" />
-              <span>{snipperTriggered ? 'Снимок...' : 'Стоп-кадр (Alt+S)'}</span>
-            </button>
-          </div>
+          <span className="text-[11px] text-zinc-500">Автономный Google Translate</span>
         </div>
 
         {/* Dual-Pane Translator */}

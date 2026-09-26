@@ -21,9 +21,69 @@ pub struct HoverTranslateResponse {
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 static MAIN_GHOST: AtomicBool = AtomicBool::new(false);
 static PIP_GHOST: AtomicBool = AtomicBool::new(false);
+static SAVED_WINDOW_GEOMETRY: Mutex<Option<(f64, f64)>> = Mutex::new(None);
+static IS_BUBBLE_MODE: AtomicBool = AtomicBool::new(false);
+
+fn set_bubble_mode_impl(app_handle: &AppHandle, enable: bool) -> Result<bool, String> {
+    if let Some(win) = app_handle.get_webview_window("main") {
+        if enable {
+            if let Ok(size) = win.outer_size() {
+                let scale = win.scale_factor().unwrap_or(1.0);
+                let lw = size.width as f64 / scale;
+                let lh = size.height as f64 / scale;
+                if lw > 120.0 && lh > 120.0 {
+                    let mut saved = SAVED_WINDOW_GEOMETRY.lock().unwrap();
+                    *saved = Some((lw, lh));
+                }
+            }
+            let _ = win.set_always_on_top(true);
+            let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize::new(60.0, 60.0)));
+            IS_BUBBLE_MODE.store(true, Ordering::SeqCst);
+            let _ = app_handle.emit("floating-bubble-sync", true);
+            Ok(true)
+        } else {
+            let (target_w, target_h) = {
+                let saved = SAVED_WINDOW_GEOMETRY.lock().unwrap();
+                saved.unwrap_or((1020.0, 720.0))
+            };
+
+            if let (Ok(pos), Ok(Some(mon))) = (win.outer_position(), win.current_monitor()) {
+                let scale = win.scale_factor().unwrap_or(1.0);
+                let mon_pos = mon.position();
+                let mon_size = mon.size();
+                let phys_w = (target_w * scale) as i32;
+                let phys_h = (target_h * scale) as i32;
+
+                let mut new_x = pos.x;
+                let mut new_y = pos.y;
+
+                if new_x + phys_w > mon_pos.x + mon_size.width as i32 {
+                    new_x = (mon_pos.x + mon_size.width as i32 - phys_w - 20).max(mon_pos.x);
+                }
+                if new_y + phys_h > mon_pos.y + mon_size.height as i32 {
+                    new_y = (mon_pos.y + mon_size.height as i32 - phys_h - 20).max(mon_pos.y);
+                }
+
+                if new_x != pos.x || new_y != pos.y {
+                    let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(new_x, new_y)));
+                }
+            }
+
+            let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize::new(target_w, target_h)));
+            let is_ghost = MAIN_GHOST.load(Ordering::SeqCst);
+            let _ = win.set_always_on_top(is_ghost);
+            IS_BUBBLE_MODE.store(false, Ordering::SeqCst);
+            let _ = app_handle.emit("floating-bubble-sync", false);
+            Ok(false)
+        }
+    } else {
+        Err("Window 'main' not found".into())
+    }
+}
 
 fn apply_ghost_mode(app_handle: &AppHandle, window_label: &str, enable: bool) -> Result<(), String> {
     if let Some(window) = app_handle.get_webview_window(window_label) {
@@ -51,13 +111,14 @@ fn apply_ghost_mode(app_handle: &AppHandle, window_label: &str, enable: bool) ->
 }
 
 #[tauri::command]
-fn start_dragging(window: tauri::WebviewWindow) -> Result<(), String> {
+fn start_dragging(app_handle: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(windows)]
     {
         use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
         use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
         use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_SYSCOMMAND};
         if let Ok(hwnd) = window.hwnd() {
+            let start_cursor = capture::win_capture::get_cursor_pos().ok();
             unsafe {
                 let _ = ReleaseCapture();
                 let _ = SendMessageW(
@@ -66,8 +127,15 @@ fn start_dragging(window: tauri::WebviewWindow) -> Result<(), String> {
                     Some(WPARAM(0xF012)),
                     Some(LPARAM(0)),
                 );
-                return Ok(());
             }
+            if let (Some((sx, sy)), Ok((ex, ey))) = (start_cursor, capture::win_capture::get_cursor_pos()) {
+                let dx = (ex - sx).abs();
+                let dy = (ey - sy).abs();
+                if dx < 6 && dy < 6 && IS_BUBBLE_MODE.load(Ordering::SeqCst) {
+                    let _ = set_bubble_mode_impl(&app_handle, false);
+                }
+            }
+            return Ok(());
         }
     }
     let _ = window.start_dragging();
@@ -77,6 +145,22 @@ fn start_dragging(window: tauri::WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 fn minimize_window(window: tauri::WebviewWindow) -> Result<(), String> {
     window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_bubble_mode(app_handle: AppHandle, enable: bool) -> Result<bool, String> {
+    set_bubble_mode_impl(&app_handle, enable)
+}
+
+#[tauri::command]
+fn toggle_bubble_mode(app_handle: AppHandle) -> Result<bool, String> {
+    let current = IS_BUBBLE_MODE.load(Ordering::SeqCst);
+    set_bubble_mode_impl(&app_handle, !current)
+}
+
+#[tauri::command]
+fn is_bubble_mode() -> Result<bool, String> {
+    Ok(IS_BUBBLE_MODE.load(Ordering::SeqCst))
 }
 
 #[tauri::command]
@@ -276,6 +360,10 @@ pub fn run() {
                             }
                         } else if sc.contains("alt") && (sc.contains("keyp") || sc.ends_with("+p")) {
                             let _ = app.emit("toggle-pip-playback", ());
+                        } else if sc.contains("alt") && (sc.contains("keyb") || sc.ends_with("+b")) {
+                            let _ = set_bubble_mode_impl(app, !IS_BUBBLE_MODE.load(Ordering::SeqCst));
+                        } else if sc.contains("alt") && (sc.contains("keys") || sc.ends_with("+s")) {
+                            let _ = app.emit("global-screen-to-ai", ());
                         }
                     }
                 })
@@ -295,15 +383,22 @@ pub fn run() {
             if let Ok(alt_p) = "alt+p".parse::<Shortcut>() {
                 let _ = app.global_shortcut().register(alt_p);
             }
+            if let Ok(alt_b) = "alt+b".parse::<Shortcut>() {
+                let _ = app.global_shortcut().register(alt_b);
+            }
+            if let Ok(alt_s) = "alt+s".parse::<Shortcut>() {
+                let _ = app.global_shortcut().register(alt_s);
+            }
 
             // Setup System Tray
             let open_i = MenuItem::with_id(app, "open_hub", "Открыть GameHUD (Настройки)", true, None::<&str>)?;
+            let bubble_i = MenuItem::with_id(app, "toggle_bubble", "🔘 Плавающая кнопка (Alt+B)", true, None::<&str>)?;
             let timer_i = MenuItem::with_id(app, "toggle_timer", "⏱️ Таймеры HUD", true, None::<&str>)?;
             let pip_i = MenuItem::with_id(app, "toggle_pip", "📺 PiP Видеоплеер", true, None::<&str>)?;
-            let snipper_i = MenuItem::with_id(app, "open_snipper", "✂️ Стоп-кадр OCR", true, None::<&str>)?;
+            let snipper_i = MenuItem::with_id(app, "open_snipper", "✂️ Стоп-кадр в AI", true, None::<&str>)?;
             let ghost_off_i = MenuItem::with_id(app, "disable_ghost", "🔓 Выключить Ghost Mode (Все окна)", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open_i, &timer_i, &pip_i, &snipper_i, &ghost_off_i, &quit_i])?;
+            let menu = Menu::with_items(app, &[&open_i, &bubble_i, &timer_i, &pip_i, &snipper_i, &ghost_off_i, &quit_i])?;
 
             if let Some(icon) = app.default_window_icon() {
                 let _tray = TrayIconBuilder::new()
@@ -318,6 +413,10 @@ pub fn run() {
                                     let _ = win.set_focus();
                                     let _ = win.emit("open-settings", ());
                                 }
+                            }
+                            "toggle_bubble" => {
+                                let current = IS_BUBBLE_MODE.load(Ordering::SeqCst);
+                                let _ = set_bubble_mode_impl(app, !current);
                             }
                             "toggle_timer" => {
                                 if let Some(win) = app.get_webview_window("timer-hud") {
@@ -404,7 +503,10 @@ pub fn run() {
             hide_window,
             toggle_window,
             is_window_visible,
-            get_cursor_position
+            get_cursor_position,
+            set_bubble_mode,
+            toggle_bubble_mode,
+            is_bubble_mode
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

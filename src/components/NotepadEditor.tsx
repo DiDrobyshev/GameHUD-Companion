@@ -483,21 +483,21 @@ export const NotepadEditor: React.FC<NotepadEditorProps> = ({
       </div>
 
       {/* 3. Tactical Status Bar */}
-      <div className="h-6 px-3 bg-[#101217] border-t border-zinc-800/80 flex items-center justify-between text-[11px] font-mono text-zinc-500 select-none shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-zinc-400">
+      <div className="h-6 px-2.5 bg-[#101217] border-t border-zinc-800/80 flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-zinc-500 select-none shrink-0 overflow-hidden">
+        <div className="flex items-center gap-2 overflow-hidden truncate">
+          <span className="text-zinc-400 shrink-0">
             Стр: <strong className="text-amber-400 font-semibold">{cursorPos.line}</strong>, Кол:{' '}
             <strong className="text-amber-400 font-semibold">{cursorPos.col}</strong>
           </span>
           <span className="text-zinc-700">|</span>
-          <span>Строк: {totalLines}</span>
-          <span className="text-zinc-700">|</span>
-          <span>Слов: {wordCount}</span>
-          <span className="text-zinc-700">|</span>
-          <span>Символов: {charCount}</span>
+          <span className="shrink-0">Строк: {totalLines}</span>
+          <span className="text-zinc-700 hidden md:inline">|</span>
+          <span className="hidden md:inline">Слов: {wordCount}</span>
+          <span className="text-zinc-700 hidden lg:inline">|</span>
+          <span className="hidden lg:inline">Символов: {charCount}</span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
           <span className="text-zinc-400">UTF-8</span>
           <span className="text-zinc-700">|</span>
           <span className="text-amber-400/80">GameHUD</span>

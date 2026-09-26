@@ -68,9 +68,10 @@ export const SettingsView: React.FC = () => {
   const HOTKEYS_LIST = [
     { label: 'Ghost Mode (Основной HUD)', key: hotkeys.ghostModeMain, desc: 'Сквозные клики мыши сквозь оверлей в игру' },
     { label: 'Ghost Mode (PiP плеер)', key: hotkeys.ghostModePip, desc: 'Сквозные клики сквозь окно видео в игру' },
+    { label: 'Плавающая кнопка (Виджет)', key: hotkeys.toggleFloatingBubble || 'Alt+B', desc: 'Свернуть программу в мини-кнопку на экране или развернуть (Alt+B)' },
+    { label: 'Стоп-кадр в чат с ИИ', key: hotkeys.snipperTool || 'Alt+S', desc: 'Снимок экрана для вопроса или перевода в чате ИИ (Alt+S)' },
     { label: 'Boss Key (PiP плеер)', key: hotkeys.bossKey, desc: 'Моментальное скрытие видео и отключение звука' },
     { label: 'Воспроизведение / Пауза (PiP)', key: hotkeys.playPausePip, desc: 'Управление видео без потери фокуса игры' },
-    { label: 'Стоп-кадр захват экрана', key: hotkeys.snipperTool, desc: 'Стоп-кадр и OCR рамкой выделения (Alt+S)' },
   ];
 
   return (

@@ -11,7 +11,8 @@ import {
   Sparkles,
   Loader2,
   Check,
-  Camera
+  Camera,
+  X
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
@@ -28,9 +29,11 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
     isAIDockExpanded,
     setAIDockExpanded,
     sendChatMessage,
-    sendScreenshotToAI,
     clearChatHistory,
     appendNoteContent,
+    pendingScreenshot,
+    setPendingScreenshot,
+    captureScreenToAIDraft,
   } = useAppStore();
 
   const [inputPrompt, setInputPrompt] = useState('');
@@ -45,9 +48,29 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
     }
   }, [chatMessages, isAIDockExpanded, isAILoading]);
 
+  // Focus input when pending screenshot is loaded
+  useEffect(() => {
+    if (pendingScreenshot) {
+      inputRef.current?.focus();
+    }
+  }, [pendingScreenshot]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputPrompt.trim() || isAILoading) return;
+    if (isAILoading) return;
+
+    if (pendingScreenshot) {
+      const query =
+        inputPrompt.trim() ||
+        'Переведи весь текст с этого скриншота на русский язык подробно и понятно для игрока:';
+      const rawBase64 = pendingScreenshot.replace(/^data:image\/[a-z]+;base64,/, '');
+      setPendingScreenshot(null);
+      setInputPrompt('');
+      await sendChatMessage(query, rawBase64);
+      return;
+    }
+
+    if (!inputPrompt.trim()) return;
 
     const query = inputPrompt.trim();
     setInputPrompt('');
@@ -56,7 +79,8 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
 
   const handleCaptureAndTranslate = async () => {
     if (isAILoading) return;
-    await sendScreenshotToAI();
+    await captureScreenToAIDraft();
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const handleAppendToNote = (content: string, id: string) => {
@@ -204,16 +228,46 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
         </div>
       )}
 
+      {/* Pending Preloaded Screenshot Preview */}
+      {pendingScreenshot && (
+        <div className="px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between gap-2 text-xs select-none">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <img
+              src={pendingScreenshot}
+              alt="Скриншот экрана"
+              className="w-12 h-8 object-cover rounded border border-amber-500/50 shrink-0 bg-black"
+            />
+            <div className="overflow-hidden">
+              <div className="text-amber-300 font-semibold text-[11px] truncate">
+                Скриншот прикреплен к вопросу
+              </div>
+              <div className="text-zinc-400 text-[10px] truncate">
+                Напишите вопрос или нажмите Enter для автоматического перевода
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setPendingScreenshot(null)}
+            className="w-6 h-6 flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-zinc-800/60 rounded transition shrink-0"
+            title="Открепить скриншот"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* 2. Compact Bottom Bar (~42px) */}
       <form
         onSubmit={handleSubmit}
         className="h-11 px-3 flex items-center justify-between gap-2 select-none"
       >
         {/* Left: AI Icon + Input */}
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <div className="flex items-center gap-1 text-amber-400 font-semibold text-xs shrink-0 select-none">
             <Zap className="w-4 h-4 fill-amber-400" />
-            <span className="font-mono text-[11px] tracking-wider text-amber-400">AI</span>
+            <span className="font-mono text-[11px] tracking-wider text-amber-400 hidden sm:inline">AI</span>
           </div>
 
           <input
@@ -221,8 +275,12 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
             type="text"
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
-            placeholder="Спроси о билде, квесте или нажми [Скриншот]..."
-            className="flex-1 bg-transparent text-xs text-zinc-100 placeholder-zinc-500 outline-none border-none py-1.5 focus:ring-0"
+            placeholder={
+              pendingScreenshot
+                ? 'Задай вопрос по скриншоту (или Enter для перевода)...'
+                : 'Спроси о билде, квесте или нажми [Скриншот]...'
+            }
+            className="flex-1 bg-transparent text-xs text-zinc-100 placeholder-zinc-500 outline-none border-none py-1.5 focus:ring-0 min-w-0"
           />
         </div>
 
@@ -233,8 +291,8 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
             type="button"
             onClick={handleCaptureAndTranslate}
             disabled={isAILoading}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all active:scale-95"
-            title="Захватить скриншот и отправить в AI для перевода игрового экрана"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all active:scale-95 shrink-0"
+            title="Сделать стоп-кадр экрана и прикрепить к вопросу в AI (Alt+S)"
           >
             <Camera className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline text-[11px]">Скриншот в AI</span>
@@ -244,7 +302,7 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
           <button
             type="button"
             onClick={() => setAIConfig({ webSearchEnabled: !aiConfig.webSearchEnabled })}
-            className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-all active:scale-95 ${
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-md border transition-all active:scale-95 shrink-0 ${
               aiConfig.webSearchEnabled
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-sm shadow-amber-500/10'
                 : 'bg-zinc-800/60 border-zinc-700/60 text-zinc-400 hover:text-zinc-200'
@@ -258,8 +316,8 @@ export const AIDock: React.FC<AIDockProps> = ({ onOpenSettings }) => {
           {/* Send Button */}
           <button
             type="submit"
-            disabled={!inputPrompt.trim() || isAILoading}
-            className="px-3 py-1 text-xs font-semibold text-zinc-950 bg-gradient-to-r from-amber-500 to-yellow-400 hover:brightness-110 disabled:opacity-40 rounded-md transition-all shadow-md shadow-amber-500/10 active:scale-95 flex items-center gap-1"
+            disabled={(!inputPrompt.trim() && !pendingScreenshot) || isAILoading}
+            className="px-3 py-1 text-xs font-semibold text-zinc-950 bg-gradient-to-r from-amber-500 to-yellow-400 hover:brightness-110 disabled:opacity-40 rounded-md transition-all shadow-md shadow-amber-500/10 active:scale-95 flex items-center gap-1 shrink-0"
             title="Отправить запрос (Enter)"
           >
             {isAILoading ? (

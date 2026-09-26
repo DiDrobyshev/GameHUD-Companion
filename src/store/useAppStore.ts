@@ -57,6 +57,9 @@ export interface AppState {
   chatMessages: ChatMessage[];
   isAILoading: boolean;
   isAIDockExpanded: boolean;
+  pendingScreenshot: string | null;
+  setPendingScreenshot: (img: string | null) => void;
+  captureScreenToAIDraft: () => Promise<void>;
   setAIConfig: (config: Partial<AIConfig>) => void;
   setAIDockExpanded: (expanded: boolean) => void;
   sendChatMessage: (content: string, imageBase64?: string) => Promise<void>;
@@ -109,6 +112,9 @@ export interface AppState {
   togglePipHud: () => Promise<void>;
   triggerSnipper: () => Promise<void>;
   refreshWindowVisibility: () => Promise<void>;
+  isFloatingBubble: boolean;
+  setFloatingBubble: (enabled: boolean) => Promise<void>;
+  toggleFloatingBubble: () => Promise<void>;
 
   // --- Config & Profile Slice ---
   activeProfile: string;
@@ -169,7 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // AI initial state
   aiConfig: {
     provider: 'Gemini 2.5 Flash',
-    apiKey: typeof window !== 'undefined' ? localStorage.getItem('gamehud_ai_key') || '' : '',
+    apiKey: '',
     modelName: 'gemini-2.5-flash',
     customEndpoint: '',
     webSearchEnabled: true,
@@ -187,9 +193,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setAIConfig: (patch) => {
     const updated = { ...get().aiConfig, ...patch };
-    if (patch.apiKey !== undefined && typeof window !== 'undefined') {
-      localStorage.setItem('gamehud_ai_key', patch.apiKey);
-    }
     set({ aiConfig: updated });
     get().saveConfigToDisk();
   },
@@ -238,6 +241,30 @@ export const useAppStore = create<AppState>((set, get) => ({
         chatMessages: [...get().chatMessages, errorMsg],
         isAILoading: false,
       });
+    }
+  },
+
+  pendingScreenshot: null,
+  setPendingScreenshot: (img: string | null) => set({ pendingScreenshot: img }),
+
+  captureScreenToAIDraft: async () => {
+    try {
+      const bytes = await invoke<number[]>('capture_screen_full');
+      if (!bytes || bytes.length === 0) return;
+      let binary = '';
+      const len = bytes.length;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = window.btoa(binary);
+      const fullUrl = `data:image/png;base64,${base64}`;
+      set({
+        pendingScreenshot: fullUrl,
+        isAIDockExpanded: true,
+        currentSection: 'notes',
+      });
+    } catch (err) {
+      console.error('Failed to capture screen to AI draft:', err);
     }
   },
 
@@ -341,6 +368,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     await invoke('show_window', { windowLabel: 'snipper' }).catch(() => {});
   },
 
+  isFloatingBubble: false,
+  setFloatingBubble: async (enabled: boolean) => {
+    try {
+      await invoke('set_bubble_mode', { enable: enabled });
+      set({ isFloatingBubble: enabled });
+    } catch (err) {
+      console.error('Failed to set bubble mode:', err);
+    }
+  },
+  toggleFloatingBubble: async () => {
+    try {
+      const res = await invoke<boolean>('toggle_bubble_mode');
+      set({ isFloatingBubble: res });
+    } catch (err) {
+      console.error('Failed to toggle bubble mode:', err);
+    }
+  },
+
   // Config initial state
   activeProfile: 'default',
   availableProfiles: ['default'],
@@ -355,6 +400,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     hoverTranslate: 'Alt+T',
     snipperTool: 'Alt+S',
     quickSearch: 'Ctrl+Space',
+    toggleFloatingBubble: 'Alt+B',
   },
 
   // --- Initializer ---
@@ -378,13 +424,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ timerPresets: config.timerPresets });
       }
 
+      // Purge any legacy leaked API key from Webview2 localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('gamehud_ai_key');
+        } catch {}
+      }
+
       if (config.aiConfig) {
-        const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gamehud_ai_key') : '';
         set({
           aiConfig: {
             ...get().aiConfig,
             ...config.aiConfig,
-            apiKey: storedKey || config.aiConfig.apiKey || '',
+            apiKey: config.aiConfig.apiKey || '',
           },
         });
       }
@@ -450,6 +502,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       // 8. Listen to open-settings from tray
       await listen('open-settings', () => {
         set({ currentSection: 'settings' });
+      });
+
+      // 9. Listen to floating bubble sync from Rust
+      await listen<boolean>('floating-bubble-sync', (event) => {
+        set({ isFloatingBubble: !!event.payload });
+      });
+
+      // 10. Listen to global screen capture to AI draft (Alt+S)
+      await listen('global-screen-to-ai', () => {
+        get().captureScreenToAIDraft();
       });
     } catch (err) {
       console.error('Failed to init app state:', err);

@@ -88,6 +88,7 @@ export interface AppConfig {
     hoverTranslate?: string;
     snipperTool: string;
     quickSearch: string;
+    toggleFloatingBubble?: string;
   };
   timerPresets: TimerPreset[];
   aiConfig?: AIConfig;
