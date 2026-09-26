@@ -118,7 +118,7 @@
 
 1. **Клонирование репозитория:**
    ```powershell
-   git clone [https://github.com/your-username/game-notes-overlay.git](https://github.com/your-username/game-notes-overlay.git)
+   git clone [https://github.com/DiDrobyshev/GameHUD-Companion.git](https://github.com/DiDrobyshev/GameHUD-Companion.git)
    cd game-notes-overlay
 
 2. **Установите зависимости:**
