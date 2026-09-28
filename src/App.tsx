@@ -12,7 +12,9 @@ import {
   FileText,
   Check,
   Languages,
-  CircleDot
+  CircleDot,
+  Pin,
+  PinOff
 } from 'lucide-react';
 
 import { useAppStore } from './store/useAppStore';
@@ -41,6 +43,8 @@ export function App() {
     tickTimers,
     isMainGhost,
     setMainGhost,
+    isPinned,
+    togglePinned,
     mainOpacity,
     activeProfile,
     captureScreenToAIDraft,
@@ -335,6 +339,28 @@ export function App() {
               title="Переводчик текста"
             >
               <Languages className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Always On Top (Pin) Toggle Button */}
+            <button
+              type="button"
+              onClick={() => togglePinned()}
+              className={`w-7 h-7 flex items-center justify-center rounded-md transition-all border active:scale-95 shrink-0 ${
+                isPinned
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-sm shadow-amber-500/20'
+                  : 'text-zinc-500 hover:text-zinc-300 bg-zinc-800/40 hover:bg-zinc-800/80 border-zinc-700/50'
+              }`}
+              title={
+                isPinned
+                  ? 'Поверх всех окон: ВКЛ (окно не уходит под игру). Нажмите, чтобы открепить'
+                  : 'Поверх всех окон: ВЫКЛ. Нажмите, чтобы закрепить поверх игры'
+              }
+            >
+              {isPinned ? (
+                <Pin className="w-3.5 h-3.5 text-amber-400 fill-amber-400/30" />
+              ) : (
+                <PinOff className="w-3.5 h-3.5 text-zinc-500" />
+              )}
             </button>
 
             {/* Ghost / Lock Toggle Button */}

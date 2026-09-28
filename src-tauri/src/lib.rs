@@ -27,6 +27,7 @@ static MAIN_GHOST: AtomicBool = AtomicBool::new(false);
 static PIP_GHOST: AtomicBool = AtomicBool::new(false);
 static SAVED_WINDOW_GEOMETRY: Mutex<Option<(f64, f64)>> = Mutex::new(None);
 static IS_BUBBLE_MODE: AtomicBool = AtomicBool::new(false);
+static MAIN_PINNED: AtomicBool = AtomicBool::new(true);
 
 fn set_bubble_mode_impl(app_handle: &AppHandle, enable: bool) -> Result<bool, String> {
     if let Some(win) = app_handle.get_webview_window("main") {
@@ -75,7 +76,8 @@ fn set_bubble_mode_impl(app_handle: &AppHandle, enable: bool) -> Result<bool, St
 
             let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize::new(target_w, target_h)));
             let is_ghost = MAIN_GHOST.load(Ordering::SeqCst);
-            let _ = win.set_always_on_top(is_ghost);
+            let is_pinned = MAIN_PINNED.load(Ordering::SeqCst);
+            let _ = win.set_always_on_top(is_ghost || is_pinned);
             IS_BUBBLE_MODE.store(false, Ordering::SeqCst);
             let _ = app_handle.emit("floating-bubble-sync", false);
             Ok(false)
@@ -87,10 +89,11 @@ fn set_bubble_mode_impl(app_handle: &AppHandle, enable: bool) -> Result<bool, St
 
 fn apply_ghost_mode(app_handle: &AppHandle, window_label: &str, enable: bool) -> Result<(), String> {
     if let Some(window) = app_handle.get_webview_window(window_label) {
-        if enable {
+        if window_label == "main" {
+            let is_pinned = MAIN_PINNED.load(Ordering::SeqCst);
+            let _ = window.set_always_on_top(enable || is_pinned);
+        } else if enable {
             let _ = window.set_always_on_top(true);
-        } else if window_label == "main" {
-            let _ = window.set_always_on_top(false);
         }
         window.set_ignore_cursor_events(enable)
             .map_err(|e| format!("Failed to set ignore_cursor_events on {window_label}: {e}"))?;
@@ -161,6 +164,44 @@ fn toggle_bubble_mode(app_handle: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 fn is_bubble_mode() -> Result<bool, String> {
     Ok(IS_BUBBLE_MODE.load(Ordering::SeqCst))
+}
+
+#[tauri::command]
+fn set_window_pinned(app_handle: AppHandle, window_label: String, pinned: bool) -> Result<(), String> {
+    if let Some(window) = app_handle.get_webview_window(&window_label) {
+        if window_label == "main" {
+            MAIN_PINNED.store(pinned, Ordering::SeqCst);
+            let is_ghost = MAIN_GHOST.load(Ordering::SeqCst);
+            let _ = window.set_always_on_top(pinned || is_ghost);
+            let _ = app_handle.emit("main-pin-sync", pinned);
+        } else {
+            let _ = window.set_always_on_top(pinned);
+        }
+        Ok(())
+    } else {
+        Err(format!("Window '{window_label}' not found"))
+    }
+}
+
+#[tauri::command]
+fn toggle_window_pinned(app_handle: AppHandle, window_label: String) -> Result<bool, String> {
+    if window_label == "main" {
+        let current = MAIN_PINNED.load(Ordering::SeqCst);
+        let next = !current;
+        set_window_pinned(app_handle, window_label, next)?;
+        Ok(next)
+    } else {
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+fn is_window_pinned(window_label: String) -> Result<bool, String> {
+    if window_label == "main" {
+        Ok(MAIN_PINNED.load(Ordering::SeqCst))
+    } else {
+        Ok(true)
+    }
 }
 
 #[tauri::command]
@@ -392,13 +433,14 @@ pub fn run() {
 
             // Setup System Tray
             let open_i = MenuItem::with_id(app, "open_hub", "Открыть GameHUD (Настройки)", true, None::<&str>)?;
+            let pin_i = MenuItem::with_id(app, "toggle_pin", "📌 Закрепить поверх окон (Toggle Pin)", true, None::<&str>)?;
             let bubble_i = MenuItem::with_id(app, "toggle_bubble", "🔘 Плавающая кнопка (Alt+B)", true, None::<&str>)?;
             let timer_i = MenuItem::with_id(app, "toggle_timer", "⏱️ Таймеры HUD", true, None::<&str>)?;
             let pip_i = MenuItem::with_id(app, "toggle_pip", "📺 PiP Видеоплеер", true, None::<&str>)?;
             let snipper_i = MenuItem::with_id(app, "open_snipper", "✂️ Стоп-кадр в AI", true, None::<&str>)?;
             let ghost_off_i = MenuItem::with_id(app, "disable_ghost", "🔓 Выключить Ghost Mode (Все окна)", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open_i, &bubble_i, &timer_i, &pip_i, &snipper_i, &ghost_off_i, &quit_i])?;
+            let menu = Menu::with_items(app, &[&open_i, &pin_i, &bubble_i, &timer_i, &pip_i, &snipper_i, &ghost_off_i, &quit_i])?;
 
             if let Some(icon) = app.default_window_icon() {
                 let _tray = TrayIconBuilder::new()
@@ -413,6 +455,10 @@ pub fn run() {
                                     let _ = win.set_focus();
                                     let _ = win.emit("open-settings", ());
                                 }
+                            }
+                            "toggle_pin" => {
+                                let current = MAIN_PINNED.load(Ordering::SeqCst);
+                                let _ = set_window_pinned(app.clone(), "main".to_string(), !current);
                             }
                             "toggle_bubble" => {
                                 let current = IS_BUBBLE_MODE.load(Ordering::SeqCst);
@@ -481,6 +527,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_dragging,
             minimize_window,
+            set_window_pinned,
+            toggle_window_pinned,
+            is_window_pinned,
             set_ghost_mode,
             disable_all_ghost,
             fetch_html_cors_bypass,

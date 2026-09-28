@@ -15,7 +15,8 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
-  Trash2
+  Trash2,
+  Pin
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { DEFAULT_AI_SYSTEM_INSTRUCTION } from '../services/aiService';
@@ -27,6 +28,8 @@ export const SettingsView: React.FC = () => {
     switchProfile,
     createProfile,
     deleteProfile,
+    isPinned,
+    togglePinned,
     mainOpacity,
     setMainOpacity,
     pipOpacity,
@@ -440,14 +443,42 @@ export const SettingsView: React.FC = () => {
           {createdMsg && <div className="text-xs text-amber-400">Профиль успешно создан и активирован!</div>}
         </div>
 
-        {/* 4. Overlay Transparency Sliders */}
+        {/* 4. Overlay Behavior & Transparency Sliders */}
         <div className="bg-[#14161b]/90 border border-zinc-800/80 rounded-xl p-5 shadow-lg flex flex-col gap-4">
           <div className="flex items-center gap-2 text-sm font-bold text-amber-400 border-b border-zinc-800 pb-2.5">
             <Sliders className="w-4 h-4" />
-            <span>Прозрачность окон HUD</span>
+            <span>Поведение и прозрачность оверлея</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Pin / Always on top toggle */}
+          <div className="flex items-center justify-between p-3 bg-[#0e1014] rounded-lg border border-zinc-800/80">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Pin className="w-4 h-4 fill-amber-400/20" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-zinc-200">
+                  Закрепить поверх всех окон (Always on top)
+                </div>
+                <div className="text-[10px] text-zinc-500">
+                  Окно остается поверх игры даже при отключенном режиме Призрак (не уходит на задний план при клике в игру)
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => togglePinned()}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition border cursor-pointer ${
+                isPinned
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                  : 'bg-zinc-800/40 text-zinc-400 border-zinc-700/60 hover:text-zinc-200'
+              }`}
+            >
+              {isPinned ? 'ВКЛЮЧЕНО' : 'ОТКЛЮЧЕНО'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
             <div className="flex flex-col gap-2">
               <div className="flex justify-between text-xs text-zinc-300">
                 <span>Прозрачность главного окна:</span>

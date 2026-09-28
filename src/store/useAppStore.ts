@@ -122,6 +122,7 @@ export interface AppState {
   mainOpacity: number;
   pipOpacity: number;
   isMainGhost: boolean;
+  isPinned: boolean;
   hotkeys: AppConfig['hotkeys'];
 
   // Config actions
@@ -129,6 +130,8 @@ export interface AppState {
   setMainOpacity: (opacity: number) => void;
   setPipOpacity: (opacity: number) => void;
   setMainGhost: (ghost: boolean) => Promise<void>;
+  setIsPinned: (pinned: boolean) => Promise<void>;
+  togglePinned: () => Promise<void>;
   switchProfile: (profileId: string) => Promise<void>;
   createProfile: (name: string) => Promise<void>;
   deleteProfile: (name: string) => Promise<void>;
@@ -392,6 +395,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   mainOpacity: 92,
   pipOpacity: 100,
   isMainGhost: false,
+  isPinned: true,
   hotkeys: {
     ghostModeMain: 'Alt+G',
     ghostModePip: 'Alt+L',
@@ -411,10 +415,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       const config: Partial<AppConfig> = JSON.parse(configStr || '{}');
 
       const isFirstRun = config.firstRun === true;
+      const isPinned = config.isPinned !== undefined ? config.isPinned : true;
       set({
         firstRun: isFirstRun,
         currentSection: 'notes',
+        isPinned,
       });
+
+      await invoke('set_window_pinned', { windowLabel: 'main', pinned: isPinned }).catch(() => {});
 
       if (config.mainOpacity !== undefined) set({ mainOpacity: config.mainOpacity });
       if (config.pipOpacity !== undefined) set({ pipOpacity: config.pipOpacity });
@@ -479,6 +487,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       await listen<boolean>('pip-ghost-sync', (event) => {
         set({ pipIsGhost: event.payload });
+      });
+      await listen<boolean>('main-pin-sync', (event) => {
+        set({ isPinned: event.payload });
       });
 
       // 6. Listen for request for PiP state from secondary windows
@@ -954,6 +965,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     await invoke('set_ghost_mode', { windowLabel: 'main', enable: ghost }).catch(() => {});
   },
 
+  setIsPinned: async (pinned: boolean) => {
+    set({ isPinned: pinned });
+    await invoke('set_window_pinned', { windowLabel: 'main', pinned }).catch(() => {});
+    await get().saveConfigToDisk();
+  },
+
+  togglePinned: async () => {
+    const next = !get().isPinned;
+    await get().setIsPinned(next);
+  },
+
   switchProfile: async (profileId: string) => {
     try {
       const profileStr = await invoke<string>('load_profile', { name: profileId }).catch(() => '{}');
@@ -1077,10 +1099,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveConfigToDisk: async () => {
-    const { firstRun, activeProfile, mainOpacity, pipOpacity, pipVolume, hotkeys, timerPresets, aiConfig } = get();
+    const { firstRun, activeProfile, isPinned, mainOpacity, pipOpacity, pipVolume, hotkeys, timerPresets, aiConfig } = get();
     const config: AppConfig = {
       firstRun,
       activeProfile,
+      isPinned,
       mainOpacity,
       pipOpacity,
       pipVolume,

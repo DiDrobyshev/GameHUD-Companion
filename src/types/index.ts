@@ -77,6 +77,7 @@ export interface ChatMessage {
 export interface AppConfig {
   firstRun?: boolean;
   activeProfile: string;
+  isPinned?: boolean;
   mainOpacity: number;
   pipOpacity: number;
   pipVolume: number;
